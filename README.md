@@ -326,4 +326,73 @@
 				- I can then push my image to my local private registry using the docker command docker push and the new image name with the docker registry information in it. -> `docker push localhost:5000/my-image`
 				- from there, I can pull my image from anywhere within this network using either localhost if you're on the same host or the IP or domain name of my docker host if I'm accessing from another host in my environment. -> `docker pull 192.168.56.100:5000/my-image`
 - docker engine -> take a deeper look at dockers architecture, how it actually runs application in isolated containers? and how it works under the hoods?
-	-  
+	-  docker engine is simply refer to a host which docker installed on it.
+	- when you installed a docker on a linux host you actually installed three different components
+		1. Docker CLI
+			- the command line interface to perform actions such as running a container, stopping a container, destroy an image, and etc.
+			- it uses the rest api to interact with docker daemon.
+			- the docker cli need not neccessary be on the same host. It could be on another system like a laptop and can still work with a remote docker engine.
+				- simply use the `-H` option in command to specify a remote docker engine address and the port as shown here -> `docker -H=remote-docker-engine:2375` and to run a container -> `docker -H=10.123.2.1:2375 run nginx`
+		2. REST API
+			- the api interface that program can use to talk to the 'Daemon' and provide the instructions.
+			- You can create your own tools using this rest api.
+		3. Docker Daemon 
+			- a background process that manages docker objects such as the images, containers, volumes and networks.
+	- containerization -> How exactly are applications containerized in docker?
+		- docker uses namespaces to isolate workspace
+		- process ID, Network, InterProcess communication, Mount and Unix Timesharing are created in their own namespace thereby providing isolation between containers.
+		- `Namespace - PID` -> one of the namespace isolation technique
+			- whenever a linux system boot up, it start with just one process with the process id of '1'. this is the root process and kicks off all the other processes in the system.
+			- By the time the system boots up completely, we have a handful of of processes running. You can running the `ps` command to list all the running processes.
+			- the process ids are uniqe and two processes cannot have the same process id.
+			- If we were to create a container which just a basically like a child system whithin a current system, the child system need to think that it is in dependant system on its own and it has its own setup processes originating from the root process with the process id of '1'.
+			- But, we know that there is no hard isolation between the container and the underline host. So, the processes running inside the container are in fact the processes running on the underline host and so two processes can not have the same process id of '1'. This is where the namespace comes in to play.
+			- With 'PID namespace', each processes can have multiple process id associated with it. For example, when the processes started in the container it actually just another set up processes on the base linux system and it get the next available process id.
+				- For example, `PID: 5` and `PID: 6` also get another process ID starting with `PID: 1` and `PID: 2` respectively in the container namespace whcih is only visible inside the container.
+				- So, the container thinks that it has its own root process tree and it is in an independant system.
+			- So, How does that relate to an actual system? How do you see this on a host?
+				- let's say I were to ran an `nginx` server as a container, we know that the `nginx` container runs an `nginx` service. 
+					- If we were to list all the services inside the docker container we see that the `nginx` service running with a process ID of '1'. This is the process ID of the service inside of the container namespace.
+					- If we list the services on the docker host, we will see the same service but with a different process ID.
+				- All processes are in fact running on the same host but seperated into their own containers using namespaces.
+		- The underlying docker host as well as the containers share the same system resources such as CPU and memory. 
+		- How much of the resources are dedicated to the host and the containers? and How does docker manage and share the resources between the containers?
+			- By default, there is no restriction as to how much of a resource a container can use and hence a container may end up utilizing all of the resources on the underlying host.
+			- But, there is a way to restrict the amount of CPU or memory a container can use.
+				- Docker uses `C group` or `control groups` to restrict the amount of hardware resources allocated to each container.
+				- This can be done by providing the `--cpus` option to the docker run command providing a value of '0.5' (in this case) will ensure that the container does not take up more than 50% of the host CPU at any given time. -> `docker run --cpus=.5 ununtu`
+				- The sames goes with memory. Setting a value of '100m' (in this case) to the `--memory` option limits the amount of memory the container can use a hundred megabytes. -> `docker run --memory=100m ubuntu`
+- Docker on windows
+	- Containers share the underlying OS kernel and as a result cannot have a windows container running on linux host or vice-versa.
+	- What are the options available for docker on Window?
+		- There are 2 options available. 
+			1. Docker on Windows using Docker Toolbox
+				- This was the original support for docker on windows. Imagine that you have a window laptop and no access to any linux system whatsoever but you would like to try docker. You don't have access to a linux system in the lab or in the cloud. What would you do?
+				- To solve this problem, You need to install a virtualization software on your windows system like `Oracle VirtualBox` or `VM workstation` and deploy a linux VM on it such as Ubuntu or Debian. Then, install docker on the linux VM and then play around with it.
+				- You are just working with docker on a linux virtual machine on a windows host. Docker however provides us with a set of tools to make this easy which is called as the `docker toolbox`. The `docker toolbox` contains a set of tools like 'Oracle VirtualBox', 'Docker Engine', 'Docker Machine', 'Docker Compose' and 'Kitematic GUI'.
+					- Requirements: 64-bit operating, Windows 7 or higher and Virtualization is enabled.
+			2. Docker Desktop for Windows
+				- For this option, we take out `Oracle VirtualBox` and use the native virtualization technology avaialbe with windows called `Microsoft Hyper-V`.
+				- During the installation process for docker for windows, it will still automatically create a linux system underneath but this time it created on the `Microsoft Hyper-V` instead of `Oracle VirtualBox` and have docker running on that system.
+				- Becuase of this dependency on hyper-v, this option is only supported for windows 10 enterprise or professional Edition and on windows server 2016. (these operating systems come with hyper-v support by default)
+				- With windows server 2016, Microsoft announced support for windows containers for the first time. You can now packaged windows applications into windows docker containers and run them on windows docker host using docker desktop for windows.
+				- When you installed docker desktop for windows the default option is to work with linux containers. But, If you would like to run windows containers, you must explicitly configure docker for windows to switch to using windows containers.
+	- Window containers
+		- In 2016, Microsoft announced windows containers. Now, you could create windows based images and run windows containers on a windows server just like how you would run linux containers on a linux system. (you can create an windows image and push to the docker store as well)
+		- Unlike in linux, there are 2 types of containers in windows.
+			1. Windows Server container 
+				- it works exactly like linux containers where the OS kernel is shared with the underlying operating system.
+				- To allow better security boundary between containers and to a lot of kernels with different versions and configuratinos to coexist, the second option was introduced known as the 'Hyper-V Isolation'.
+			2. Hyper-V Isolation
+				- Each container is run with a highly optimized virtual machine guaranteeing complete kernel isolation between the containers and the underlying host. 
+				- While in the linux world you had a number of base images for a linux system such as Ubuntu, Debian, Fedora and etc.
+				- For windows, there are 2 base images -> `Windows Server Core` and `Nano Server` (More light weight)
+				- Windows containers are supported on Windows Server 2016, Nano Server and Windows 10 Professional and Enterprise (Hyper-V Isolated Containers).
+	- VirtualBox or Hyper-V
+		- VirtualBox or Hyper-V cannot coexist on the same windows host. 
+- Docker on Mac (similar to docker on windows) 
+	- There are 2 options.
+		1. Docker on Mac using Docker Toolbox
+		2. Docker Desktop for Mac
+			- Using `HyperKit` technologhy instead of `Oracle VirtulBox`.
+- Container Orchestration
